@@ -113,6 +113,7 @@ void SERCOM::enableUART()
 
 void SERCOM::flushUART()
 {
+  // Skip checking transmission completion if data register is empty
   // Wait for transmission to complete, if ok to do so.
   while(!sercom->USART.INTFLAG.bit.TXC && onFlushWaitUartTXC);
 

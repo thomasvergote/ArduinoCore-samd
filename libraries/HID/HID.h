@@ -21,7 +21,7 @@
 
 #include <stdint.h>
 #include <Arduino.h>
-#include "USB/PluggableUSB.h"
+#include "api/PluggableUSB.h"
 
 #if defined(USBCON)
 
@@ -53,6 +53,11 @@
 // "protocol" variable is used for this purpose.
 #define HID_BOOT_PROTOCOL	0
 #define HID_REPORT_PROTOCOL	1
+
+// HID Request Type HID1.11 Page 51 7.2.1 Get_Report Request
+#define HID_REPORT_TYPE_INPUT   1
+#define HID_REPORT_TYPE_OUTPUT  2
+#define HID_REPORT_TYPE_FEATURE 3
 
 typedef struct
 {
@@ -99,7 +104,7 @@ protected:
   uint8_t getShortName(char* name);
 
 private:
-  uint32_t epType[1];
+  unsigned int epType[1];
 
   HIDSubDescriptor* rootNode;
   uint16_t descriptorSize;

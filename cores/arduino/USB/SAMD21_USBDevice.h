@@ -24,6 +24,8 @@
 #include <stdio.h>
 #include <stdint.h>
 
+#include "sync.h"
+
 typedef uint8_t ep_t;
 
 class USBDevice_SAMD21G18x {
@@ -220,32 +222,6 @@ void USBDevice_SAMD21G18x::calibrate() {
 }
 
 /*
- * Synchronization primitives.
- * TODO: Move into a separate header file and make an API out of it
- */
-
-class __Guard {
-public:
-	__Guard() : primask(__get_PRIMASK()), loops(1) {
-		__disable_irq();
-	}
-	~__Guard() {
-		if (primask == 0) {
-			__enable_irq();
-			// http://infocenter.arm.com/help/topic/com.arm.doc.dai0321a/BIHBFEIB.html
-			__ISB();
-		}
-	}
-	uint32_t enter() { return loops--; }
-private:
-	uint32_t primask;
-	uint32_t loops;
-};
-
-#define synchronized for (__Guard __guard; __guard.enter(); )
-
-
-/*
  * USB EP generic handlers.
  */
 
@@ -420,7 +396,7 @@ public:
 private:
 	USBDevice_SAMD21G18x &usbd;
 
-	RingBuffer _rx_buffer;
+	arduino::RingBuffer _rx_buffer;
 
 	const uint32_t ep;
 	volatile uint32_t current, incoming;

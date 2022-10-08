@@ -19,6 +19,7 @@
 #include <Arduino.h>
 #include <Reset.h> // Needed for auto-reset with 1200bps port touch
 #include "CDC.h"
+#include "USBAPI.h"
 #include "SAMD21_USBDevice.h"
 
 #include <stdlib.h>
@@ -26,6 +27,8 @@
 #include <stdint.h>
 
 #ifdef CDC_ENABLED
+
+using namespace arduino;
 
 extern USBDevice_SAMD21G18x usbd;
 
@@ -37,7 +40,9 @@ extern USBDevice_SAMD21G18x usbd;
 
 #define CDC_LINESTATE_READY		(CDC_LINESTATE_RTS | CDC_LINESTATE_DTR)
 
-typedef struct __attribute__((packed)) {
+extern USBDeviceClass USBDevice;
+
+typedef struct {
 	uint32_t dwDTERate;
 	uint8_t bCharFormat;
 	uint8_t bParityType;
@@ -191,12 +196,12 @@ void Serial_::enableInterrupt() {
 	usbd.epBank0EnableTransferComplete(CDC_ENDPOINT_OUT);
 }
 
-void Serial_::begin(uint32_t /* baud_count */)
+void Serial_::begin(unsigned long /* baudrate */)
 {
 	// uart config is ignored in USB-CDC
 }
 
-void Serial_::begin(uint32_t /* baud_count */, uint8_t /* config */)
+void Serial_::begin(unsigned long /* baudrate */, uint16_t /* config */)
 {
 	// uart config is ignored in USB-CDC
 }
