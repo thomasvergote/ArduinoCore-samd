@@ -37,6 +37,9 @@ TwoWire::TwoWire(SERCOM * s, uint8_t pinSDA, uint8_t pinSCL)
 }
 
 void TwoWire::begin(void) {
+  // track baud clock for auto-restarting bus in timeout condition
+  activeBaudrate = TWI_CLOCK;
+
   //Master Mode
   sercom->initMasterWIRE(TWI_CLOCK);
   sercom->enableWIRE();
@@ -55,6 +58,9 @@ void TwoWire::begin(uint8_t address, bool enableGeneralCall) {
 }
 
 void TwoWire::setClock(uint32_t baudrate) {
+  // track baud clock for auto-restarting bus in timeout condition
+  activeBaudrate = baudrate;
+
   sercom->disableWIRE();
   sercom->initMasterWIRE(baudrate);
   sercom->enableWIRE();
@@ -72,6 +78,7 @@ size_t TwoWire::requestFrom(uint8_t address, size_t quantity, bool stopBit)
   }
 
   size_t byteRead = 0;
+  bool busOwner;
 
   rxBuffer.clear();
 
@@ -80,26 +87,32 @@ size_t TwoWire::requestFrom(uint8_t address, size_t quantity, bool stopBit)
     // Read first data
     rxBuffer.store_char(sercom->readDataWIRE());
 
-    bool busOwner;
+  
     // Connected to slave
-    for (byteRead = 1; byteRead < quantity && (busOwner = sercom->isBusOwnerWIRE()); ++byteRead)
+     for (byteRead = 1; byteRead < quantity && !sercom->didTimeout() && (busOwner = sercom->isBusOwnerWIRE()); ++byteRead)
     {
-      sercom->prepareAckBitWIRE();                          // Prepare Acknowledge
-      sercom->prepareCommandBitsWire(WIRE_MASTER_ACT_READ); // Prepare the ACK command for the slave
-      rxBuffer.store_char(sercom->readDataWIRE());          // Read data and send the ACK
-    }
-    sercom->prepareNackBitWIRE();                           // Prepare NACK to stop slave transmission
-    //sercom->readDataWIRE();                               // Clear data register to send NACK
+      // prepare and send ACK for the slave
+      sercom->prepareAckBitWIRE();
+      sercom->prepareCommandBitsWire(WIRE_MASTER_ACT_READ);
 
-    if (stopBit && busOwner)
-    {
-      sercom->prepareCommandBitsWire(WIRE_MASTER_ACT_STOP);   // Send Stop unless arbitration was lost
+      if (quantity > 1) rxBuffer.store_char(sercom->readDataWIRE());    // Read next byte
     }
 
-    if (!busOwner)
+    sercom->prepareNackBitWIRE(); // prepare NACK for slave
+
+    if (stopBit || didTimeout() || !busOwner) sercom->prepareCommandBitsWire(WIRE_MASTER_ACT_STOP); // Send Stop
+
+    if (!busOwner || sercom->didTimeout())
     {
       byteRead--;   // because last read byte was garbage/invalid
     }
+  }
+  // catch and handle timeout condition
+  if (sercom->didTimeout())
+  {
+    // reset the bus
+    setClock(activeBaudrate);
+    return 0;
   }
 
   return byteRead;
@@ -123,35 +136,42 @@ void TwoWire::beginTransmission(uint8_t address) {
 //  1 : Data too long
 //  2 : NACK on transmit of address
 //  3 : NACK on transmit of data
-//  4 : Other error
+//  4 : Timeout
+//  5 : Other error
 uint8_t TwoWire::endTransmission(bool stopBit)
 {
-  transmissionBegun = false ;
+    uint8_t errCode = 0;
+  bool busOwner;
 
   // Start I2C transmission
-  if ( !sercom->startTransmissionWIRE( txAddress, WIRE_WRITE_FLAG ) )
+  if ( sercom->startTransmissionWIRE( txAddress, WIRE_WRITE_FLAG ) )
   {
-    sercom->prepareCommandBitsWire(WIRE_MASTER_ACT_STOP);
-    return 2 ;  // Address error
-  }
-
-  // Send all buffer
-  while( txBuffer.available() )
-  {
-    // Trying to send data
-    if ( !sercom->sendDataMasterWIRE( txBuffer.read_char() ) )
+    // successful start so transmit data
+    while ( txBuffer.available() && (busOwner = sercom->isBusOwnerWIRE()) )
     {
-      sercom->prepareCommandBitsWire(WIRE_MASTER_ACT_STOP);
-      return 3 ;  // Nack or error
+      // Trying to send data
+      if ( !sercom->sendDataMasterWIRE( txBuffer.read_char() ) )
+      {
+        errCode = 3; // Nack or error
+        txBuffer.clear();
+        break;
+      }
     }
+
+    if (stopBit || errCode || !busOwner) sercom->prepareCommandBitsWire(WIRE_MASTER_ACT_STOP); // Send Stop
+
+  } else errCode = 2; // Address error
+
+  // catch timeout condition
+  if (sercom->didTimeout()) {
+    // reset the bus
+    setClock(activeBaudrate);
+    errCode = 4;
   }
   
-  if (stopBit)
-  {
-    sercom->prepareCommandBitsWire(WIRE_MASTER_ACT_STOP);
-  }   
+  transmissionBegun = false ;
 
-  return 0;
+  return errCode;
 }
 
 uint8_t TwoWire::endTransmission()

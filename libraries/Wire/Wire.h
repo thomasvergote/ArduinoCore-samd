@@ -27,6 +27,9 @@
  // WIRE_HAS_END means Wire has end()
 #define WIRE_HAS_END 1
 
+ // WIRE_HAS_TIMEOUT means Wire implements timeout detection
+#define WIRE_HAS_TIMEOUT 1
+
 namespace arduino {
 
 class TwoWire : public HardwareI2C
@@ -47,6 +50,9 @@ class TwoWire : public HardwareI2C
 
     size_t requestFrom(uint8_t address, size_t quantity, bool stopBit);
     size_t requestFrom(uint8_t address, size_t quantity);
+
+    bool didTimeout() { return sercom->didTimeout(); }
+    void setTimeout(uint16_t ms) { sercom->setTimeout(ms); }
 
     size_t write(uint8_t data);
     size_t write(const uint8_t * data, size_t quantity);
@@ -73,7 +79,10 @@ class TwoWire : public HardwareI2C
 
     bool transmissionBegun;
 
-    // RX Buffer
+    // Used to re-initialize the clock rate after a timeout
+    uint32_t activeBaudrate;
+
+     // RX Buffer
     arduino::RingBufferN<256> rxBuffer;
 
     //TX buffer
