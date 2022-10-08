@@ -29,7 +29,9 @@
 
 namespace arduino {
 
-class TwoWire : public HardwareI2C
+namespace arduino {
+
+class TwoWire : public Stream
 {
   public:
     TwoWire(SERCOM *s, uint8_t pinSDA, uint8_t pinSCL);
@@ -47,6 +49,9 @@ class TwoWire : public HardwareI2C
 
     size_t requestFrom(uint8_t address, size_t quantity, bool stopBit);
     size_t requestFrom(uint8_t address, size_t quantity);
+
+    bool didTimeout() { return sercom->didTimeout(); }
+    void setTimeout(uint16_t ms) { sercom->setTimeout(ms); }
 
     size_t write(uint8_t data);
     size_t write(const uint8_t * data, size_t quantity);
